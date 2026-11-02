@@ -16,7 +16,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-# No ORM metadata yet; autogenerate is enabled once models exist (week 2).
+# No ORM metadata yet; autogenerate is enabled once models exist (Task 2).
 target_metadata = None
 
 

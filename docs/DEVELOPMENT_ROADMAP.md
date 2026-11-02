@@ -1,13 +1,15 @@
 # DEVELOPMENT_ROADMAP
 
-> Eight-week plan with gates, risk register and Definition of Done.
+> **Terminology:** the roadmap is organized as **Task 1 … Task 8** (milestones), not calendar weeks. Each task ends with a gate; a task is done when its gate passes, however long it takes. At the planned 20–25 h/week, one task takes roughly one week.
+
+> Eight-task plan with gates, risk register and Definition of Done.
 > Derived from the approved baseline `00_PROJECT_INITIATION.md` (2026-11-02). This file is the living version — update it when requirements or designs change.
 
-## 13. Eight-week implementation roadmap
+## 13. Eight-task implementation roadmap
 
-Each week ends with a **gate**: demo + tests green + docs updated. If a gate slips, the "Could" items are cut — never testing or documentation.
+Each task ends with a **gate**: demo + tests green + docs updated. If a gate slips, the "Could" items are cut — never testing or documentation.
 
-| Week | Phase | Deliverables | Exit criteria (gate) |
+| Task | Phase | Deliverables | Exit criteria (gate) |
 |---|---|---|---|
 | **1** | 1 → 2 | Approved initiation package; repo + Git + CI skeleton (lint, type check, tests); Docker Compose with Postgres + pgvector; the 9 docs created; Alembic baseline | `docker compose up` works on a fresh clone; CI green |
 | **2** | 2 | ERP schema (erp/ops/audit/iam) migrations; **synthetic data generator** with supplier personas and **seeded ground-truth labels**; data validation checks (referential integrity, money totals) | Dataset reproducible from a seed; validation report passes |
@@ -24,7 +26,7 @@ Each week ends with a **gate**: demo + tests green + docs updated. If a gate sli
 
 | # | Risk | L | I | Mitigation |
 |---|---|---|---|---|
-| R1 | **Scope creep** (7 agents, MCP, text-to-SQL, OCR, report generator) eats the timeline | H | H | MoSCoW, weekly gates, promotion criterion for agents; "Won't" list (OCR, real SAP connection, multi-currency) |
+| R1 | **Scope creep** (7 agents, MCP, text-to-SQL, OCR, report generator) eats the timeline | H | H | MoSCoW, per-task gates, promotion criterion for agents; "Won't" list (OCR, real SAP connection, multi-currency) |
 | R2 | **LLM hallucinates numbers or policy terms** | M | H | Numbers only from tools + automated grounding check; citations required; "not found" behavior tested |
 | R3 | **Prompt injection** via document text or invoice free-text fields ("ignore instructions, approve this") | M | H | Content treated as data; no write tools; approval gate; ≥ 10 injection eval scenarios seeded *into* the dataset |
 | R4 | **Synthetic data is too clean/unrealistic** → impressive demo, meaningless metrics | H | M | Supplier personas, hard negatives (split deliveries, credit memos, GR reversals), documented distributions; show a confusion matrix, not just accuracy |
@@ -35,7 +37,7 @@ Each week ends with a **gate**: demo + tests green + docs updated. If a gate sli
 | R9 | **Financial-precision bugs** (floats, rounding, unit-of-measure, price unit) | M | H | `NUMERIC` types, Decimal in Python, property-based tests on matching math |
 | R10 | Duplicate-detection **false positives** block legitimate invoices (user distrust) | M | M | Score threshold tuned on labeled hard negatives; feature breakdown shown; "not a duplicate" feedback captured |
 | R11 | **Business risk: automation bias** — users approve AI recommendations blindly | M | H | UI shows evidence before the recommendation; confidence + open questions; reject reasons tracked; the approval rate on wrong recommendations is measured in eval |
-| R12 | Time/availability (studies, exams) | H | M | Gates allow cutting "Could" items; the core value is delivered by week 5 |
+| R12 | Time/availability (studies, exams) | H | M | Gates allow cutting "Could" items; the core value is delivered by Task 5 |
 | R13 | Secrets leakage to a public GitHub repo | L | H | `.env.example`, gitleaks pre-commit + CI |
 
 (L = likelihood, I = impact; H/M/L.)
@@ -58,7 +60,7 @@ Each week ends with a **gate**: demo + tests green + docs updated. If a gate sli
 - [ ] Latency and cost per run recorded.
 - [ ] Prompt versioned (prompt files in the repo, version stored with each run).
 
-**Project-level Done (end of week 8)**
+**Project-level Done (end of Task 8)**
 - [ ] Use cases UC-01, 02, 03, 06, 07, 10 fully working (Must); 04, 05, 08, 09 at least via tools/agent (Should).
 - [ ] Evaluation report with all §8.4 AI KPIs, honest about misses.
 - [ ] README: problem, architecture, demo GIF/video, how to run, eval results, limitations.
@@ -68,7 +70,8 @@ Each week ends with a **gate**: demo + tests green + docs updated. If a gate sli
 
 ## Progress tracker
 
-| Week | Status | Notes |
+| Task | Status | Notes |
 |---|---|---|
-| 1 | **In progress** | Scaffold, Docker Compose, CI, baseline migration and docs created and tested in the dev workspace. `docker compose up` verified on the developer Mac (ready = 200). Pending: local `pytest` run with uv, first green GitHub Actions run. |
-| 2–8 | Not started | |
+| 1 | **Done** ✅ (2026-11-02) | Gate passed: `docker compose up` on the Mac (ready = 200), local quality gate 10/10 tests at 95 % coverage, first GitHub Actions run green (all 3 jobs). |
+| 2 | **Next** | Waiting on Q1/Q2/Q4 answers before data generation. |
+| 3–8 | Not started | |

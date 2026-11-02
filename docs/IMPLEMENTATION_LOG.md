@@ -5,7 +5,13 @@
 
 ---
 
-## 2026-11-02 (afternoon) — Week 1: verification on the developer Mac + test-config fix
+## 2026-11-02 (evening) — Terminology: milestones are "Task 1–8"
+
+- At the project owner's request, milestones are now called **Task 1 … Task 8** instead of "Week 1 … Week 8" in all docs, the README and code comments. Real time units (e.g. "20–25 h/week") are unchanged. No functional change.
+
+---
+
+## 2026-11-02 (afternoon) — Task 1: verification on the developer Mac + test-config fix
 
 ### Verified on the developer machine (MacBook Air, Apple Silicon)
 - `docker compose up --build`: images built (`python:3.12-slim`, `pgvector/pgvector:pg17` → PostgreSQL 17.11); `eops_test` created by the init script; `migrate` ran revision `0001` and exited 0; the API started; `GET /health/ready` → **200**; the container healthcheck (`/health/live` every 15 s) is passing.
@@ -16,18 +22,25 @@
 - **Fix:** `tests/conftest.py` now calls `load_dotenv(<repo>/.env, override=False)` before anything else. Shell/CI variables still win, and `EOPS_ENVIRONMENT=test` is set first so tests don't inherit `local`. `python-dotenv` was added as an explicit **dev** dependency (it was already installed transitively via pydantic-settings; relying on a transitive dependency is fragile).
 - **Verification:** with `.env` → 10 passed; without `.env` → 6 passed / 4 skipped; CI mode (shell env + `EOPS_REQUIRE_DB=1`) → 10 passed.
 
-### Still open for the week-1 gate
-- `uv` installation on the Mac and a local `pytest` run.
-- First GitHub Actions run.
+- Local quality gate on the Mac (uv 0.13.6, CPython 3.12.16, against the compose database): `ruff check` clean, `mypy --strict` clean, `pytest --cov` → **10 passed, coverage 95 %**.
 
-### Noted for week 2
+- Repository published: https://github.com/princekumar2002de-droid/enterpriseops-ai (commit `4041df2`, 38 files; `.env`/`.venv` confirmed absent).
+- **First GitHub Actions run #41474098669: success.** Docker image builds ✓ (14 s), Secret scan ✓ (11 s), Backend lint/types/tests ✓ (35 s) — integration tests ran against the `pgvector/pgvector:pg17` service container.
+
+### Task 1 gate: PASSED ✅
+
+### CI annotations to address (housekeeping, Task 2)
+- `ubuntu-latest` is moving to Ubuntu 26 → pin `runs-on: ubuntu-24.04` so runner changes don't silently change the build environment.
+- `gitleaks/gitleaks-action@v2.3.9` targets the deprecated Node.js 20 runtime → evaluate `v3.0.0`.
+
+### Noted for Task 2
 - The Docker healthcheck logs a `request_completed` line for `/health/live` every 15 s. Health-probe requests should be logged at DEBUG to keep the logs readable.
 
 ---
 
-## 2026-11-02 — Week 1: project foundation
+## 2026-11-02 — Task 1: project foundation
 
-**Goal:** a reproducible skeleton with database, migrations, CI and documentation, so weeks 2+ can focus on business logic.
+**Goal:** a reproducible skeleton with database, migrations, CI and documentation, so Task 2 onwards can focus on business logic.
 
 ### Built
 - Repository layout per `SYSTEM_ARCHITECTURE.md` §9.3 (only the parts needed now; `frontend/`, `data_generation/`, `evaluation/` come later).
@@ -62,4 +75,4 @@
 ADR-013 (uv), ADR-014 (migrations as a one-shot compose job), ADR-015 (separate test database + `EOPS_REQUIRE_DB`). See `DECISIONS.md`.
 
 ### Open questions carried forward
-Q1–Q10 from `PROJECT_REQUIREMENTS.md` §17 are still open. Needed by: Q4 (SAP/GBI alignment) and Q2 before week 2 data generation; Q9 (tolerance semantics) before week 3; Q3 (embeddings) before week 4.
+Q1–Q10 from `PROJECT_REQUIREMENTS.md` §17 are still open. Needed by: Q4 (SAP/GBI alignment) and Q2 before Task 2 data generation; Q9 (tolerance semantics) before Task 3; Q3 (embeddings) before Task 4.

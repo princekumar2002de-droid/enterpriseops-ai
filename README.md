@@ -6,7 +6,7 @@ EnterpriseOps AI investigates supplier-invoice exceptions the way an experienced
 
 > **Agents reason, services compute, humans approve, the audit log remembers.**
 
-**Status:** Week 1 of 8 — foundation (API skeleton, database, migrations, CI). See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
+**Status:** Task 1 of 8 — foundation (API skeleton, database, migrations, CI). See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ---
 
@@ -51,7 +51,7 @@ infra/          Database init scripts
 docs/           Requirements, architecture, schema, agent design, API, roadmap, decisions, log
 .github/        CI: lint, types, tests with PostgreSQL+pgvector, secret scan, Docker build
 ```
-Coming later: `data_generation/` (week 2), `documents/` + `evaluation/` (week 4), `frontend/` (week 6).
+Coming later: `data_generation/` (Task 2), `documents/` + `evaluation/` (Task 4), `frontend/` (Task 6).
 
 ## Documentation
 
@@ -62,9 +62,9 @@ Coming later: `data_generation/` (week 2), `documents/` + `evaluation/` (week 4)
 | [DATABASE_SCHEMA](docs/DATABASE_SCHEMA.md) | SAP-aligned data model and migration history |
 | [AGENT_DESIGN](docs/AGENT_DESIGN.md) | Agent roadmap, investigation graph, responsibilities |
 | [API_DOCUMENTATION](docs/API_DOCUMENTATION.md) | Endpoints and conventions |
-| [DEVELOPMENT_ROADMAP](docs/DEVELOPMENT_ROADMAP.md) | 8-week plan, risks, Definition of Done |
+| [DEVELOPMENT_ROADMAP](docs/DEVELOPMENT_ROADMAP.md) | 8-task plan, risks, Definition of Done |
 | [TESTING_AND_EVALUATION](docs/TESTING_AND_EVALUATION.md) | Test strategy and AI evaluation plan |
-| [IMPLEMENTATION_LOG](docs/IMPLEMENTATION_LOG.md) | What was built and verified, week by week |
+| [IMPLEMENTATION_LOG](docs/IMPLEMENTATION_LOG.md) | What was built and verified, task by task |
 | [DECISIONS](docs/DECISIONS.md) | Architecture decision records |
 
 ## Disclaimer

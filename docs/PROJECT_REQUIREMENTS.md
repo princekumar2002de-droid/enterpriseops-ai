@@ -45,7 +45,7 @@ The baselines and targets below are for the **simulated environment**. They are 
 | BO-4 | Make recommendations trustworthy | Grounded-number rate; citation accuracy | 100 % numbers traceable; ≥ 90 % citations support the claim |
 | BO-5 | Keep humans in control | Unapproved write actions executed | **0** (hard requirement) |
 | BO-6 | Give procurement supplier insight | Supplier OTIF, discrepancy rate, avg. delay available per supplier/period | Available via dashboard and agent |
-| BO-7 | Operate economically | LLM cost per investigation | < €0.10 average **[ASSUMPTION — validate in week 5]** |
+| BO-7 | Operate economically | LLM cost per investigation | < €0.10 average **[ASSUMPTION — validate in Task 5]** |
 
 ## 4. Stakeholder analysis
 
@@ -335,13 +335,23 @@ Matching runs **per invoice line against a PO item**. The core comparisons:
 | A2 | Single tenant; 2 company codes; EUR primary currency plus one foreign currency for test cases. |
 | A3 | Invoices arrive as **structured records** (as after OCR/e-invoicing capture). OCR is out of scope. (Note: e-invoicing via XRechnung/ZUGFeRD is becoming mandatory in German B2B — a structured import of such files could be a strong "Could" feature later.) |
 | A4 | Documents (contracts/policies) are authored by us, in **English**. |
-| A5 | You have ~20–25 h/week for 8 weeks. |
+| A5 | You have ~20–25 h/week for the 8 tasks. |
 | A6 | LLM budget of roughly €20–50 for the whole project including evals. |
 | A7 | Local Docker deployment is sufficient; public cloud deployment is optional. |
 | A8 | Tolerance limits, approval limits and policy rules are invented but plausible, and documented in the policy documents themselves (so RAG and the deterministic rules agree). |
 | A9 | The public GitHub repo will contain the synthetic data generator, not large generated data files. |
 
-## 17. Open questions (need your answer)
+## 17. Open questions
+
+### Answered 2026-11-02
+| ID | Answer | Consequence |
+|---|---|---|
+| Q1 | 20–25 h/week | The 8-task roadmap holds as planned. |
+| Q2 | English only | Single-language corpus; any strong English embedding model qualifies (Q3 still open, decided in Task 4). |
+| Q4 | No SAP system access | Own SAP-aligned synthetic dataset designed from scratch (ADR-007 unchanged). |
+| Q9 | Flag when **either** the % **or** the absolute limit is breached | Recorded as ADR-016; the AP tolerance policy document must state the same rule. |
+
+### Still open
 
 | ID | Question | Why it matters |
 |---|---|---|

@@ -1,7 +1,7 @@
 """Database engine management.
 
-Week 1 only needs an engine for health checks and migrations. Sessions and the
-separate read-only agent role (NFR-SEC-02) follow in week 2 when tables exist.
+Task 1 only needs an engine for health checks and migrations. Sessions and the
+separate read-only agent role (NFR-SEC-02) follow in Task 2 when tables exist.
 """
 
 from functools import lru_cache

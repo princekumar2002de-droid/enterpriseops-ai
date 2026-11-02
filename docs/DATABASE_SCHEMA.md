@@ -91,7 +91,7 @@ erDiagram
 | `audit` | Append-only audit trail | 0001 |
 | `iam` | Users and roles | 0001 |
 
-Tables: **none yet** (week 2). Extension: `vector` (pgvector) installed by migration 0001.
+Tables: **none yet** (Task 2). Extension: `vector` (pgvector) installed by migration 0001.
 
 ### Migration history
 | Revision | Date | Description | Reversible |
@@ -104,5 +104,5 @@ Tables: **none yet** (week 2). Extension: `vector` (pgvector) installed by migra
 | `eops` | Development data (docker compose volume `pgdata`) |
 | `eops_test` | Automated tests only (created by `infra/postgres/init/01-create-test-database.sql`) |
 
-### Planned database roles (week 2)
+### Planned database roles (Task 2)
 `eops_agent_ro` (SELECT on curated views only), `eops_app`, `eops_action` — see NFR-SEC-02 and `SYSTEM_ARCHITECTURE.md` §9.4. Until then, development uses the single owner role from `.env`.

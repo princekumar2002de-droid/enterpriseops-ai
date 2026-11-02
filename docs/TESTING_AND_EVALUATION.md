@@ -8,8 +8,8 @@
 |---|---|---|---|---|
 | Unit | Pure functions, API behavior with dependencies overridden | No | **Never** | Yes |
 | Integration (`@pytest.mark.integration`) | Migrations, SQL, services against real PostgreSQL + pgvector | `eops_test` | No | Yes (required) |
-| Agent tests (week 4+) | Graph logic with **recorded/mocked** LLM responses | `eops_test` | No | Yes |
-| Live evaluation (week 4+) | Real Claude calls on the scenario dataset; produces the eval report | `eops_test` | Yes | Manual / scheduled, not on every push |
+| Agent tests (Task 4+) | Graph logic with **recorded/mocked** LLM responses | `eops_test` | No | Yes |
+| Live evaluation (Task 4+) | Real Claude calls on the scenario dataset; produces the eval report | `eops_test` | Yes | Manual / scheduled, not on every push |
 
 **Rules**
 - Tests use the separate `eops_test` database (`EOPS_TEST_DATABASE_URL`), never development data.
@@ -27,7 +27,7 @@ uv run pytest --cov --cov-report=term-missing
 uv run ruff check . && uv run ruff format --check . && uv run mypy   # same gates as CI
 ```
 
-## 3. Current test inventory (week 1)
+## 3. Current test inventory (Task 1)
 
 | Test | Verifies | Type |
 |---|---|---|
@@ -44,9 +44,9 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy   # same gate
 
 **Last verified run** (2026-11-02, dev workspace: Python 3.12.3, PostgreSQL 16 + pgvector 0.6.0):
 10 passed; coverage 95 %; ruff, ruff format and mypy (strict) clean.
-Docker stack verified on the developer Mac (PostgreSQL 17.11 + pgvector, readiness 200). Not yet verified: the GitHub Actions run.
+Docker stack verified on the developer Mac (PostgreSQL 17.11 + pgvector, readiness 200). Developer Mac: 10 passed, 95 %. GitHub Actions run #41474098669: all jobs green, integration tests executed (`EOPS_REQUIRE_DB=1`).
 
-## 4. AI evaluation plan (weeks 4–7)
+## 4. AI evaluation plan (Tasks 4–7)
 
 The KPI definitions are in `PROJECT_REQUIREMENTS.md` §8.4 (AI/system KPIs). Planned datasets in `evaluation/`:
 

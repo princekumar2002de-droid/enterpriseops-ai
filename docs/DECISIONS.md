@@ -54,7 +54,7 @@ ADR-001 to ADR-012 were proposed in Phase 1 and **approved on 2026-11-02**. Late
 
 ## ADR-009 — MCP as an outer interface only
 **Status:** Accepted (2026-11-02)
-**Decision:** Internal tool calls stay in-process. Optionally (week 7), expose the read-only tool registry as an MCP server for external MCP clients.
+**Decision:** Internal tool calls stay in-process. Optionally (Task 7), expose the read-only tool registry as an MCP server for external MCP clients.
 **Consequences:** + demonstrates MCP without adding latency or complexity to the core path.
 
 ## ADR-010 — Pandas offline only; aggregation in SQL
@@ -88,3 +88,9 @@ ADR-001 to ADR-012 were proposed in Phase 1 and **approved on 2026-11-02**. Late
 **Status:** Accepted (2026-11-02)
 **Decision:** Integration tests run only against `EOPS_TEST_DATABASE_URL` (`eops_test`). Locally they skip if it is unset. In CI, `EOPS_REQUIRE_DB=1` turns a missing DB into a failure.
 **Consequences:** + tests can drop/recreate schemas safely; CI can't go falsely green.
+
+## ADR-016 — Tolerance rule: flag when either limit is breached
+**Status:** Accepted (2026-11-02)
+**Context:** Tolerance rules have a percentage and an absolute (EUR) limit. They can be combined with OR (strict) or AND (lenient).
+**Decision:** A variance is out of tolerance if it exceeds the percentage limit **or** the absolute limit (lower and upper bounds evaluated separately). The AP Tolerance Policy document must state exactly this rule so the deterministic engine and the RAG corpus never contradict each other.
+**Consequences:** + conservative financial control; small-value lines with a high percentage variance are caught. − More exceptions on low-value lines, handled by the small-difference (BD-like) auto-accept limit.

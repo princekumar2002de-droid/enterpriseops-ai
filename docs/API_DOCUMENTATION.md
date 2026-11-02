@@ -11,9 +11,9 @@
 | Base URL (local) | `http://localhost:8000` |
 | Format | JSON, UTF-8. Money values will be serialized as **strings** (Decimal) to avoid float rounding (ADR-012). |
 | Request ID | Every response has an `X-Request-ID` header. Clients may send their own (`[A-Za-z0-9._-]{1,64}`); anything else is replaced. The ID appears in every server log line for that request. |
-| Errors | FastAPI default `{"detail": ...}` for now; a uniform error envelope arrives with the first business endpoints (week 3). |
-| Auth | None yet. JWT + RBAC from week 5 (NFR-SEC-05). Health endpoints will stay unauthenticated. |
-| Versioning | Business endpoints will be mounted under `/api/v1` (week 3). |
+| Errors | FastAPI default `{"detail": ...}` for now; a uniform error envelope arrives with the first business endpoints (Task 3). |
+| Auth | None yet. JWT + RBAC from Task 5 (NFR-SEC-05). Health endpoints will stay unauthenticated. |
+| Versioning | Business endpoints will be mounted under `/api/v1` (Task 3). |
 
 ## Endpoints
 
@@ -42,7 +42,7 @@ Security note: on failure only the error *class* is logged, never the driver mes
 
 ## Planned (not implemented)
 
-| Week | Endpoints |
+| Task | Endpoints |
 |---|---|
 | 3 | `GET /api/v1/invoices`, `GET /api/v1/invoices/{id}` (incl. PO/GR side-by-side), `GET /api/v1/exceptions`, `POST /api/v1/matching/runs`, `GET /api/v1/kpis/{kpi}` |
 | 4–5 | `POST /api/v1/agent/runs`, `GET /api/v1/agent/runs/{id}/stream` (SSE), `GET /api/v1/approvals`, `POST /api/v1/approvals/{id}/decision` |
