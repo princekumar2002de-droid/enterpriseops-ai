@@ -82,21 +82,85 @@ erDiagram
 
 ## Implementation status
 
-### Schemas
-| Schema | Purpose | Created in |
-|---|---|---|
-| `erp` | Simulated SAP-aligned source system | 0001 |
-| `ops` | Matching results, exceptions, cases, actions | 0001 |
-| `docs` | RAG corpus (documents, chunks, embeddings) | 0001 |
-| `audit` | Append-only audit trail | 0001 |
-| `iam` | Users and roles | 0001 |
+**Source of truth:** `backend/app/db/tables.py` (SQLAlchemy Core). Migrations are generated from it with
+`alembic revision --autogenerate`, reviewed, and committed; `tests/test_schema_drift.py` fails if the
+migrated database and `tables.py` ever disagree (ADR-017). Constraint names follow a fixed naming
+convention (`pk_`, `fk_`, `uq_`, `ix_`, `ck_<table>_<name>`).
 
-Tables: **none yet** (Task 2). Extension: `vector` (pgvector) installed by migration 0001.
+### How to change the schema
+```bash
+cd backend
+# 1. edit app/db/tables.py
+uv run alembic revision --autogenerate -m "short description"   # 2. generate
+# 3. review the new file in migrations/versions/ (add grants / data changes by hand, mark them MANUAL)
+uv run alembic upgrade head && uv run pytest                    # 4. apply + drift test
+```
+
+### Schemas
+| Schema | Purpose | Created in | Tables |
+|---|---|---|---|
+| `erp` | Simulated SAP-aligned source system | 0001 | 15 (0002) |
+| `ops` | EnterpriseOps configuration and (Task 3+) results | 0001 | 1 (0002) |
+| `docs` | RAG corpus | 0001 | none yet (Task 4) |
+| `audit` | Append-only audit trail | 0001 | none yet (Task 5) |
+| `iam` | Users and business roles | 0001 | 2 (0002) |
+| `eval` | Ground truth for evaluation, **never visible to agents** (ADR-018) | 0002 | 3 (0002) |
+
+### Tables (migration 0002)
+Money `NUMERIC(15,2)`, unit prices `NUMERIC(15,4)`, quantities `NUMERIC(13,3)` (ADR-012).
+
+| Table | Key | Important columns / rules | SAP analogue |
+|---|---|---|---|
+| `erp.company_code` | company_code | DE01 (EUR), US01 (USD) | T001 |
+| `erp.plant` | plant_id | DE11, DE12, US11 | T001W |
+| `erp.payment_terms` | terms_code | net_days, discount_days/pct (both set or both NULL) | T052 |
+| `erp.supplier` | supplier_id | vat_id (indexed: duplicate vendor masters share it), terms_code | LFA1 / BP |
+| `erp.supplier_bank_account` | bank_account_id | iban_masked + SHA-256 iban_hash only (no clear IBAN), valid_from/valid_to history | LFBK |
+| `erp.material` | material_id | material_group, base_uom, standard_price | MARA/MBEW |
+| `erp.contract_header` / `contract_item` | contract_id (+ item_no) | validity dates, agreed_price per material | EKKO/EKPO (cat. K) |
+| `erp.purchase_order_header` | po_number | supplier, company, doc_date, currency, terms_code | EKKO |
+| `erp.purchase_order_item` | (po_number, item_no) | quantity, net_price per unit, delivery_date (promised), gr_based_iv, optional contract reference | EKPO/EKET |
+| `erp.goods_receipt` | (mat_doc, mat_doc_year, line_no) | movement_type 101 receipt / 102 reversal (separate row, references the 101), quantity always > 0 | MATDOC/MSEG |
+| `erp.invoice_header` | invoice_id | doc_type INVOICE/CREDIT_MEMO, supplier_reference, invoice/received/posting dates, net+tax=gross (CHECK), status RECEIVED/PAID, payment_block (set by matching, Task 3), reference_invoice_id for credit memos | RBKP |
+| `erp.invoice_item` | (invoice_id, item_no) | optional PO reference (NULL = non-PO line), quantity, unit_price, net_amount | RSEG |
+| `erp.payment` | payment_id | payment_date, amount, discount_taken | payment run / BSAK |
+| `erp.inventory_level` | (material, plant, as_of) | stock snapshot (minimal) | MARD |
+| `iam.role` | role_code | approval_limit_eur — seeded by the migration (8 roles) | — |
+| `iam.app_user` | user_id | role_code, email (`*.example` domain) | — |
+| `ops.tolerance_rule` | (company_code, tolerance_key) | PP / DQ / BD limits, policy_ref (semantics: ADR-016, PROJECT_REQUIREMENTS §8.2) | OMR6 |
+| `eval.dataset_run` | run_id | seed, profile, generator_version, row_counts, content_hash | — |
+| `eval.supplier_persona` | supplier_id | hidden behavior profile used by the generator | — |
+| `eval.ground_truth_label` | label_id | invoice_id, item_no (NULL = invoice level), label_code, is_hard_negative, details (JSONB) | — |
+
+### Business roles (seeded in `iam.role`)
+| Role | Approval limit (EUR) |
+|---|---|
+| AP_CLERK | — (proposes only) |
+| AP_MANAGER | 25,000 |
+| FINANCE_MANAGER | 250,000 |
+| BUYER, PROCUREMENT_MANAGER, FINANCE_VIEWER, AUDITOR | — |
+| ADMIN | — (no business approvals: segregation of duties) |
+
+### Database roles and privileges (ADR-020)
+Group roles (`NOLOGIN`), created by migration 0002 if missing. Login users for the application are added in Task 5.
+
+| Privilege | `eops_agent_ro` | `eops_app` | `eops_action` |
+|---|---|---|---|
+| Read `erp` | ✅ | ✅ | ✅ |
+| Write `erp` | ❌ | ❌ | ✅ (INSERT/UPDATE, no DELETE) |
+| Read `ops` | ✅ | ✅ | ❌ |
+| Write `ops` | ❌ | ✅ | ❌ |
+| Read `iam` | ❌ | ✅ | ✅ |
+| Read `eval` | ❌ | ❌ | ❌ |
+
+Verified by `tests/test_db_roles.py` (agent role: SELECT works; INSERT/UPDATE/DELETE on erp and any read of `eval`/`iam` → *permission denied*).
+Task 3 will narrow `eops_agent_ro` from whole tables to curated read views.
 
 ### Migration history
 | Revision | Date | Description | Reversible |
 |---|---|---|---|
-| `0001` | 2026-11-02 | Baseline: `CREATE EXTENSION vector`; create schemas `erp, ops, docs, audit, iam` | Yes (`DROP SCHEMA … RESTRICT` refuses to drop non-empty schemas) |
+| `0001` | 2026-11-02 | Baseline: `CREATE EXTENSION vector`; schemas `erp, ops, docs, audit, iam` | Yes |
+| `0002` | 2026-11-02 | 21 tables in `erp`, `iam`, `ops`, `eval`; `eval` schema; 8 business roles; DB group roles + grants | Yes (revokes privileges; cluster-wide roles are intentionally not dropped) |
 
 ### Databases
 | Database | Use |
@@ -104,5 +168,17 @@ Tables: **none yet** (Task 2). Extension: `vector` (pgvector) installed by migra
 | `eops` | Development data (docker compose volume `pgdata`) |
 | `eops_test` | Automated tests only (created by `infra/postgres/init/01-create-test-database.sql`) |
 
-### Planned database roles (Task 2)
-`eops_agent_ro` (SELECT on curated views only), `eops_app`, `eops_action` — see NFR-SEC-02 and `SYSTEM_ARCHITECTURE.md` §9.4. Until then, development uses the single owner role from `.env`.
+## Synthetic dataset (Task 2)
+
+Generated by `backend/data_generation/` — see TESTING_AND_EVALUATION.md §5 for scenarios, labels and validation.
+
+```bash
+cd backend
+uv run python -m data_generation generate --seed 42 --profile full   # load into EOPS_DATABASE_URL
+uv run python -m data_generation validate                             # re-run the checks
+```
+
+| Profile | Suppliers | Materials | POs | Invoices | GR lines | Invoices with exception |
+|---|---|---|---|---|---|---|
+| `full` (seed 42) | 61 | 400 | 3,030 | 3,496 + 55 credit memos | 7,589 | 18.9 % |
+| `small` (seed 42) | 21 | 80 | ~320 | ~375 | ~790 | ~18 % |

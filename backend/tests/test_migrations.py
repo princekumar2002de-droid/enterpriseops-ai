@@ -10,7 +10,8 @@ from sqlalchemy import Engine, text
 
 from tests.conftest import alembic_config
 
-EXPECTED_SCHEMAS = {"erp", "ops", "docs", "audit", "iam"}
+EXPECTED_SCHEMAS = {"erp", "ops", "docs", "audit", "iam", "eval"}
+EXPECTED_TABLES = 21
 
 
 def _schemas(engine: Engine) -> set[str]:
@@ -22,6 +23,18 @@ def _schemas(engine: Engine) -> set[str]:
 @pytest.mark.integration
 def test_baseline_creates_domain_schemas(migrated_engine: Engine) -> None:
     assert _schemas(migrated_engine) >= EXPECTED_SCHEMAS
+
+
+@pytest.mark.integration
+def test_head_creates_all_tables(migrated_engine: Engine) -> None:
+    with migrated_engine.connect() as conn:
+        count = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema IN ('erp', 'ops', 'iam', 'eval')"
+            )
+        ).scalar_one()
+    assert count == EXPECTED_TABLES
 
 
 @pytest.mark.integration

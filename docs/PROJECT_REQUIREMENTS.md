@@ -277,6 +277,20 @@ Matching runs **per invoice line against a PO item**. The core comparisons:
 
 **Precision rules:** all money is stored as `NUMERIC(15,2)` (prices `NUMERIC(15,4)`), **never float**. Comparisons happen in the PO currency; multi-currency conversion is out of scope for the MVP (EUR + one foreign currency for the `CURRENCY_MISMATCH` case).
 
+#### Tolerance semantics and rule precedence (decided 2026-11-02, ADR-016 / ADR-021)
+These rules define what the deterministic engine (Task 3) must report; the ground-truth labels follow them exactly.
+
+| # | Rule |
+|---|---|
+| T1 | **Small difference first (BD):** a price difference with \|diff\| ≤ 5.00 (company currency) per line is accepted. |
+| T2 | **Price (PP):** otherwise flag `PRICE_VARIANCE` if the % limit (+2 %) **or** the absolute limit (+100.00) is exceeded (lower side: −10 % / −500.00). |
+| T3 | **Quantity (DQ):** flag `QTY_VARIANCE` if invoiced qty > net received qty − previously invoiced qty (zero tolerance). |
+| R1 | A suspected duplicate gets **only** `DUPLICATE_SUSPECTED`; its quantities do not count as "previously invoiced". |
+| R2 | `NO_GOODS_RECEIPT` on a line suppresses `QTY_VARIANCE` on that line. Net received = Σ 101 − Σ 102. |
+| R3 | `CURRENCY_MISMATCH` suppresses price checks for that invoice. |
+| R4 | Credit memos are excluded from quantity and duplicate checks; they reduce the amount payable. |
+| R5 | `BANK_DETAILS_CHANGED`: a non-initial bank account became valid 0–30 days before the invoice date. |
+
 ### 8.3 Exception taxonomy and severity
 
 | Code | Severity rule | Blocks payment |

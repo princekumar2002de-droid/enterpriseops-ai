@@ -6,7 +6,7 @@ EnterpriseOps AI investigates supplier-invoice exceptions the way an experienced
 
 > **Agents reason, services compute, humans approve, the audit log remembers.**
 
-**Status:** Task 1 of 8 — foundation (API skeleton, database, migrations, CI). See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
+**Status:** Task 2 of 8 — SAP-aligned ERP schema and a seeded synthetic dataset with labeled exceptions. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ---
 
@@ -22,6 +22,13 @@ docker compose up --build         # db -> migrate -> api
 Then open:
 - http://localhost:8000/health/ready — should return `"status": "ready"`
 - http://localhost:8000/docs — interactive API documentation
+
+Load the synthetic ERP dataset (≈35,000 rows, 18 months, labeled exceptions):
+
+```bash
+cd backend && uv sync
+uv run python -m data_generation generate --seed 42 --profile full
+```
 
 ## Development without Docker for the API
 
@@ -46,12 +53,12 @@ uv run pytest --cov               # integration tests run when EOPS_TEST_DATABAS
 ## Repository layout
 
 ```
-backend/        FastAPI app, domain services, agents (later), Alembic migrations, tests
+backend/        FastAPI app, data generator (data_generation/), Alembic migrations, tests
 infra/          Database init scripts
 docs/           Requirements, architecture, schema, agent design, API, roadmap, decisions, log
 .github/        CI: lint, types, tests with PostgreSQL+pgvector, secret scan, Docker build
 ```
-Coming later: `data_generation/` (Task 2), `documents/` + `evaluation/` (Task 4), `frontend/` (Task 6).
+Coming later: `documents/` + `evaluation/` (Task 4), `frontend/` (Task 6).
 
 ## Documentation
 

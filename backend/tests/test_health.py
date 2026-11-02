@@ -3,11 +3,13 @@
 from collections.abc import Iterator
 
 import pytest
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
 from app.db.session import build_engine, get_engine
-from app.main import app
+from app.main import _is_health_probe, app
+from tests.conftest import alembic_config
 
 
 @pytest.fixture
@@ -62,7 +64,17 @@ def test_readiness_is_ready_after_migrations(client: TestClient, migrated_engine
     checks = response.json()["checks"]
     assert checks["database"] is True
     assert checks["pgvector_version"]
-    assert checks["migration_revision"] == "0001"
+    head = ScriptDirectory.from_config(alembic_config("unused")).get_current_head()
+    assert checks["migration_revision"] == head
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [("/health/live", True), ("/health/ready", True), ("/api/v1/invoices", False), ("/", False)],
+)
+def test_health_probes_are_recognised(path: str, expected: bool) -> None:
+    # Probes are logged at DEBUG so the 15 s container healthcheck doesn't flood the logs.
+    assert _is_health_probe(path) is expected
 
 
 def test_openapi_schema_is_published(client: TestClient) -> None:

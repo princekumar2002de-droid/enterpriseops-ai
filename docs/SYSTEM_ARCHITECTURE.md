@@ -97,9 +97,9 @@ enterpriseops-ai/
 │   │   ├── agents/         # LangGraph graphs, nodes, prompts, tool registry
 │   │   ├── db/             # SQLAlchemy models, sessions, views
 │   │   └── mcp/            # optional MCP server (read-only tools)
+│   ├── data_generation/    # synthetic ERP generator + seeded labels (ADR-019)
 │   ├── migrations/         # Alembic
 │   └── tests/              # unit / integration / agent (mocked)
-├── data_generation/        # synthetic ERP generator + seeded labels
 ├── documents/              # sample contracts & policies (source of RAG corpus)
 ├── evaluation/             # datasets, runners, reports
 ├── frontend/               # React + TS + Tailwind + Recharts

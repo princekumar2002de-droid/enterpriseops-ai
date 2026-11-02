@@ -73,5 +73,5 @@ Each task ends with a **gate**: demo + tests green + docs updated. If a gate sli
 | Task | Status | Notes |
 |---|---|---|
 | 1 | **Done** ✅ (2026-11-02) | Gate passed: `docker compose up` on the Mac (ready = 200), local quality gate 10/10 tests at 95 % coverage, first GitHub Actions run green (all 3 jobs). |
-| 2 | **Next** | Waiting on Q1/Q2/Q4 answers before data generation. |
+| 2 | **In progress** | Verified in the dev workspace **and on the developer Mac** (identical dataset hash, 19/19 checks, 37 tests, 99 % coverage). Pending: push + green CI. |
 | 3–8 | Not started | |

@@ -23,6 +23,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "python-dotenv>=1.0",
+    "faker>=30",
 ]
 
 [tool.uv]
@@ -39,13 +40,15 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "RUF"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]  # assert and dummy credentials are fine in tests
+"tests/**" = ["S101", "S105", "S106", "S608"]  # asserts, dummy credentials, test SQL
+# Synthetic data: non-cryptographic randomness is intended; SQL is built from constants.
+"data_generation/**" = ["S311", "S608"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app", "tests"]
+files = ["app", "data_generation", "tests"]
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
@@ -60,5 +63,5 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "data_generation"]
 branch = true

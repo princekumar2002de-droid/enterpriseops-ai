@@ -20,6 +20,11 @@ _VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 log = structlog.get_logger(__name__)
 
 
+def _is_health_probe(path: str) -> bool:
+    """Container/load-balancer probes: logged at DEBUG to keep logs readable."""
+    return path.startswith("/health/")
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(level=settings.log_level, json_logs=settings.json_logs)
@@ -50,7 +55,8 @@ def create_app() -> FastAPI:
             raise
         duration_ms = round((time.perf_counter() - started) * 1000, 1)
         response.headers[REQUEST_ID_HEADER] = request_id
-        log.info(
+        log_method = log.debug if _is_health_probe(request.url.path) else log.info
+        log_method(
             "request_completed",
             method=request.method,
             path=request.url.path,
