@@ -1,0 +1,49 @@
+# EnterpriseOps AI – local development stack.
+#   docker compose up --build        start db -> migrate -> api
+#   docker compose down              stop (data is kept in the volume)
+#   docker compose down -v           stop and DELETE the database volume
+# Values come from .env (copy .env.example first).
+
+name: enterpriseops
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-eops}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"  # localhost only, never 0.0.0.0
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot job: apply database migrations, then exit.
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment: &api-env
+      EOPS_ENVIRONMENT: ${EOPS_ENVIRONMENT:-local}
+      EOPS_LOG_LEVEL: ${EOPS_LOG_LEVEL:-INFO}
+      EOPS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-eops}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: ./backend
+    environment: *api-env
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

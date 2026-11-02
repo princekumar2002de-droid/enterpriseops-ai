@@ -1,0 +1,61 @@
+"""Structured logging setup (NFR-OBS-01).
+
+Every log line carries the request ID (and later the agent ``trace_id``) through
+``structlog.contextvars``, so one request can be followed across services.
+"""
+
+import logging
+import sys
+
+import structlog
+
+
+def configure_logging(level: str = "INFO", json_logs: bool = True) -> None:
+    """Configure structlog and route standard-library logging through it."""
+    shared_processors: list[structlog.types.Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        structlog.processors.StackInfoRenderer(),
+    ]
+
+    renderer: structlog.types.Processor = (
+        structlog.processors.JSONRenderer()
+        if json_logs
+        else structlog.dev.ConsoleRenderer(colors=sys.stderr.isatty())
+    )
+
+    structlog.configure(
+        processors=[
+            *shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+    formatter = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.format_exc_info,
+            renderer,
+        ],
+    )
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(level)
+
+    # Uvicorn's access log duplicates our request log; keep its error log.
+    logging.getLogger("uvicorn.access").handlers.clear()
+    logging.getLogger("uvicorn.access").propagate = False
+    for name in ("uvicorn", "uvicorn.error"):
+        logging.getLogger(name).handlers.clear()
+        logging.getLogger(name).propagate = True

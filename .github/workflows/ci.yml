@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend - lint, types, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: eops
+          POSTGRES_PASSWORD: eops_ci
+          POSTGRES_DB: eops_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U eops -d eops_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      EOPS_ENVIRONMENT: ci
+      EOPS_DATABASE_URL: postgresql+psycopg://eops:eops_ci@localhost:5432/eops_test
+      EOPS_TEST_DATABASE_URL: postgresql+psycopg://eops:eops_ci@localhost:5432/eops_test
+      EOPS_REQUIRE_DB: "1"  # integration tests must run, never silently skip
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install dependencies (from lockfile)
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Type check
+        run: uv run mypy
+      - name: Tests with coverage
+        run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=80
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build backend image
+        run: docker build -t enterpriseops-backend:ci backend

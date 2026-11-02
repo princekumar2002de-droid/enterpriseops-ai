@@ -1,0 +1,65 @@
+# IMPLEMENTATION_LOG
+
+> Chronological record of what was actually built and verified. Newest entry first.
+> Rule: nothing is listed as done unless it was run and tested.
+
+---
+
+## 2026-11-02 (afternoon) — Week 1: verification on the developer Mac + test-config fix
+
+### Verified on the developer machine (MacBook Air, Apple Silicon)
+- `docker compose up --build`: images built (`python:3.12-slim`, `pgvector/pgvector:pg17` → PostgreSQL 17.11); `eops_test` created by the init script; `migrate` ran revision `0001` and exited 0; the API started; `GET /health/ready` → **200**; the container healthcheck (`/health/live` every 15 s) is passing.
+
+### Bug found and fixed
+- **Symptom (found by review, before it caused a false result):** `pytest` read `EOPS_TEST_DATABASE_URL` only from the shell environment, not from `.env`. On the Mac the 4 integration tests would have been skipped, although the README says `.env` enables them.
+- **Root cause:** `pydantic-settings` loads `.env` only for the `Settings` model; the test fixtures read `os.environ` directly.
+- **Fix:** `tests/conftest.py` now calls `load_dotenv(<repo>/.env, override=False)` before anything else. Shell/CI variables still win, and `EOPS_ENVIRONMENT=test` is set first so tests don't inherit `local`. `python-dotenv` was added as an explicit **dev** dependency (it was already installed transitively via pydantic-settings; relying on a transitive dependency is fragile).
+- **Verification:** with `.env` → 10 passed; without `.env` → 6 passed / 4 skipped; CI mode (shell env + `EOPS_REQUIRE_DB=1`) → 10 passed.
+
+### Still open for the week-1 gate
+- `uv` installation on the Mac and a local `pytest` run.
+- First GitHub Actions run.
+
+### Noted for week 2
+- The Docker healthcheck logs a `request_completed` line for `/health/live` every 15 s. Health-probe requests should be logged at DEBUG to keep the logs readable.
+
+---
+
+## 2026-11-02 — Week 1: project foundation
+
+**Goal:** a reproducible skeleton with database, migrations, CI and documentation, so weeks 2+ can focus on business logic.
+
+### Built
+- Repository layout per `SYSTEM_ARCHITECTURE.md` §9.3 (only the parts needed now; `frontend/`, `data_generation/`, `evaluation/` come later).
+- `backend/` (Python 3.12, managed with **uv** and a lockfile):
+  - `app/core/config.py` — typed settings from `EOPS_*` env vars; the DB URL is a `SecretStr`.
+  - `app/core/logging.py` — structlog: console output locally, JSON in test/CI/production.
+  - `app/main.py` — app factory; request-ID middleware (validated header, bound to every log line); request-completion log with duration.
+  - `app/db/session.py` — engine with `pool_pre_ping` and a connect timeout.
+  - `app/api/health.py` — `/health/live`, `/health/ready` (DB, pgvector, migration revision → 200/503).
+  - Alembic: URL from env or `-x db_url=`; migration **0001** (pgvector extension + schemas `erp, ops, docs, audit, iam`).
+  - Tests: 6 unit + 4 integration.
+  - `Dockerfile`: two-stage build, non-root user, healthcheck.
+- `docker-compose.yml`: `db` (pgvector/pgvector:pg17, port bound to 127.0.0.1) → `migrate` (one-shot) → `api`.
+- `infra/postgres/init/01-create-test-database.sql` creates `eops_test`.
+- CI (`.github/workflows/ci.yml`): ruff, format check, mypy strict, pytest with a pgvector service and an 80 % coverage gate, gitleaks secret scan, Docker build.
+- `.pre-commit-config.yaml` (optional): ruff, gitleaks, hygiene hooks.
+- Docs: the approved package split into the 9 living documents; README.
+
+### Verified (in the dev workspace)
+- `ruff check`, `ruff format --check`, `mypy --strict`: clean.
+- `pytest`: 10/10 passed against PostgreSQL 16 + pgvector; coverage 95 %.
+- Test modes: no DB → 4 skipped; `EOPS_REQUIRE_DB=1` without a DB → errors (as intended).
+- `alembic upgrade head` on a fresh DB; downgrade/upgrade round trip.
+- Uvicorn smoke test: `/health/live` 200, `/health/ready` 200 with revision `0001`, `X-Request-ID` header present, structured request log emitted.
+- `docker compose config` validates.
+
+### Not yet verified (needs the developer machine / GitHub)
+- `docker compose up --build` with the real `pgvector/pgvector:pg17` and `python:3.12-slim` images (Docker Hub was not reachable from the dev workspace).
+- First GitHub Actions run.
+
+### Decisions taken
+ADR-013 (uv), ADR-014 (migrations as a one-shot compose job), ADR-015 (separate test database + `EOPS_REQUIRE_DB`). See `DECISIONS.md`.
+
+### Open questions carried forward
+Q1–Q10 from `PROJECT_REQUIREMENTS.md` §17 are still open. Needed by: Q4 (SAP/GBI alignment) and Q2 before week 2 data generation; Q9 (tolerance semantics) before week 3; Q3 (embeddings) before week 4.
