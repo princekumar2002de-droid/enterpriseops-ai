@@ -43,12 +43,14 @@ ignore = []
 "tests/**" = ["S101", "S105", "S106", "S608"]  # asserts, dummy credentials, test SQL
 # Synthetic data: non-cryptographic randomness is intended; SQL is built from constants.
 "data_generation/**" = ["S311", "S608"]
+# KPI SQL is assembled from module constants only; user input is always a bound parameter.
+"app/services/kpis.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app", "data_generation", "tests"]
+files = ["app", "data_generation", "evaluation", "tests"]
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
@@ -63,5 +65,5 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["app", "data_generation"]
+source = ["app", "data_generation", "evaluation"]
 branch = true

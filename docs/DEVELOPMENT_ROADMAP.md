@@ -70,8 +70,12 @@ Each task ends with a **gate**: demo + tests green + docs updated. If a gate sli
 
 ## Progress tracker
 
+**Backlog (not scheduled):** harder synthetic duplicate variants; CI runner pin `ubuntu-24.04`; gitleaks-action v3.
+
+
 | Task | Status | Notes |
 |---|---|---|
 | 1 | **Done** ✅ (2026-11-02) | Gate passed: `docker compose up` on the Mac (ready = 200), local quality gate 10/10 tests at 95 % coverage, first GitHub Actions run green (all 3 jobs). |
-| 2 | **In progress** | Verified in the dev workspace **and on the developer Mac** (identical dataset hash, 19/19 checks, 37 tests, 99 % coverage). Pending: push + green CI. |
-| 3–8 | Not started | |
+| 2 | **Done** ✅ (2026-11-02) | Gate passed: 21 tables + DB roles (migration 0002), seeded dataset with ground truth (19/19 checks, identical hash on Mac and Linux), 37 tests at 99 % coverage, CI run #41481129266 green. |
+| 3 | **In progress** | Built and verified in the dev workspace: engine meets all D3 targets on held-out seed 42 (P/R 1.000, 0 % false alarms on 1,051 look-alikes), 12 KPIs, API v1, 105 tests at 98 %. Pending: developer Mac + green CI. |
+| 4–8 | Not started | |

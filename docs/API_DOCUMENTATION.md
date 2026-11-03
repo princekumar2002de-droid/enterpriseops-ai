@@ -8,42 +8,81 @@
 
 | Topic | Convention |
 |---|---|
-| Base URL (local) | `http://localhost:8000` |
-| Format | JSON, UTF-8. Money values will be serialized as **strings** (Decimal) to avoid float rounding (ADR-012). |
-| Request ID | Every response has an `X-Request-ID` header. Clients may send their own (`[A-Za-z0-9._-]{1,64}`); anything else is replaced. The ID appears in every server log line for that request. |
-| Errors | FastAPI default `{"detail": ...}` for now; a uniform error envelope arrives with the first business endpoints (Task 3). |
-| Auth | None yet. JWT + RBAC from Task 5 (NFR-SEC-05). Health endpoints will stay unauthenticated. |
-| Versioning | Business endpoints will be mounted under `/api/v1` (Task 3). |
+| Base URL (local) | `http://localhost:8000`; business endpoints under **`/api/v1`** |
+| Format | JSON, UTF-8. Money, prices and quantities are **strings** (Decimal) to avoid float rounding (ADR-012). |
+| Request ID | Every response has an `X-Request-ID` header. Clients may send their own (`[A-Za-z0-9._-]{1,64}`); anything else is replaced. The ID is in every log line and in every error body. |
+| Errors | Uniform envelope (see below). |
+| Paging | `limit` (1–200, default 50) and `offset` (≥ 0); responses are `{"items": [...], "total": n, "limit": l, "offset": o}`. |
+| "Latest run" | Match results always come from the latest **completed** matching run (shared definition with the agents via the `agent` views, ADR-022). |
+| Auth | None yet — the API is bound to `127.0.0.1` by docker compose. JWT + RBAC arrive in Task 5 (NFR-SEC-05). |
 
-## Endpoints
+### Error envelope
+```json
+{"error": {"code": "invoice_not_found",
+           "message": "Invoice 9999999999 does not exist.",
+           "details": [{"location": ["path", "invoice_id"], "message": "..."}],
+           "request_id": "3c165c2b977e4c0ebdee6a23055fbd20"}}
+```
+| HTTP | `code` values |
+|---|---|
+| 400 | `invalid_period`, `breakdown_not_supported` |
+| 404 | `invoice_not_found`, `kpi_not_found`, `no_match_run`, `not_found` |
+| 422 | `validation_error` (with `details`) |
 
-### `GET /health/live` — liveness
-Whether the process is up. It does not touch the database. Used by the container `HEALTHCHECK`.
+## Health
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health/live` | Process is up (container healthcheck). Logged at DEBUG. |
+| GET | `/health/ready` | DB reachable, pgvector installed, migrations applied → 200, else 503. |
+
+## Matching
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/matching/runs` | Run the deterministic engine now (≈ 1–2 s on the full dataset). Writes a new versioned run, sets/clears payment blocks. **201** + run summary. |
+| GET | `/api/v1/matching/runs/latest` | Latest completed run: version, counts, exceptions by code. 404 `no_match_run` if none. |
 
 ```json
-200 OK
-{"status": "ok", "service": "EnterpriseOps AI", "version": "0.1.0"}
+POST /api/v1/matching/runs  →  201
+{"run_id": 2, "engine_version": "1.0.0", "invoice_count": 3551, "exception_count": 948,
+ "blocked_invoices": 542, "blocked_unpaid_invoices": 87,
+ "counts_by_code": {"DUPLICATE_SUSPECTED": 52, "PRICE_VARIANCE": 385, "...": 0}}
 ```
 
-### `GET /health/ready` — readiness
-Whether the API can serve business traffic. It checks: database reachable, pgvector installed, migrations applied.
+## Invoices
+| Method | Path | Query parameters |
+|---|---|---|
+| GET | `/api/v1/invoices` | `match_status` (MATCHED, WITHIN_TOLERANCE, BLOCKED, FLAGGED, NOT_APPLICABLE), `supplier_id`, `company_code`, `blocked` (true = has payment block), `limit`, `offset` — newest received first |
+| GET | `/api/v1/invoices/{invoice_id}` | `invoice_id` = 10 digits. Returns the **three-way evidence**: header + match status, every line with PO quantity/price, net received and previously invoiced quantity, price/quantity outcome, all goods receipts (incl. reversals) of the PO items, exceptions, and duplicate pairs (both directions). |
 
+Example (abridged) — why invoice `5100000621` is blocked:
 ```json
-200 OK
-{"status": "ready",
- "checks": {"database": true, "pgvector_version": "0.8.x", "migration_revision": "0001"}}
+{"invoice_id": "5100000621", "match_status": "BLOCKED", "payment_block": "R",
+ "lines": [{"item_no": 1, "invoiced_qty": "39.000", "net_received_qty": "31.000",
+            "qty_outcome": "QTY_VARIANCE", "price_outcome": "MATCH"}],
+ "exceptions": [{"code": "QTY_VARIANCE", "severity": "HIGH", "amount_at_risk": "...",
+                 "details": {"invoiced_qty": "39.000", "available_qty": "31.000"}}]}
 ```
-```json
-503 Service Unavailable
-{"status": "not_ready",
- "checks": {"database": false, "pgvector_version": null, "migration_revision": null}}
-```
-Security note: on failure only the error *class* is logged, never the driver message (it can contain host and user names).
+
+## Exceptions
+| Method | Path | Query parameters |
+|---|---|---|
+| GET | `/api/v1/exceptions` | `code` (one of the 10 exception codes), `severity` (LOW/MEDIUM/HIGH/CRITICAL), `supplier_id`, `blocks_payment`, `unpaid_only`, `limit`, `offset` — sorted by `amount_at_risk` descending |
+
+## KPIs
+| Method | Path | Query parameters |
+|---|---|---|
+| GET | `/api/v1/kpis` | KPI catalog: id, name, unit, description, formula, supplier breakdown support |
+| GET | `/api/v1/kpis/{kpi_id}` | `company_code` (default DE01), `date_from`, `date_to`, `group_by=supplier` (where supported). Returns `value` and `n` (sample size) and, if grouped, a `breakdown` sorted by value. |
+
+KPI ids: `first_pass_match_rate`, `exception_rate`*, `open_value_at_risk`*, `blocked_open_invoices`,
+`supplier_otif`*, `avg_delivery_delay_days`*, `price_variance_pct`*, `non_po_invoice_share`,
+`cash_discount_capture_rate`, `late_payment_rate`, `median_receipt_to_payment_days`,
+`median_po_to_receipt_days` (* = supplier breakdown). Definitions: PROJECT_REQUIREMENTS §8.4 and
+`backend/app/services/kpis.py`. Period filter: invoice KPIs use the received date, delivery KPIs the
+promised delivery date, payment KPIs the payment date.
 
 ## Planned (not implemented)
-
 | Task | Endpoints |
 |---|---|
-| 3 | `GET /api/v1/invoices`, `GET /api/v1/invoices/{id}` (incl. PO/GR side-by-side), `GET /api/v1/exceptions`, `POST /api/v1/matching/runs`, `GET /api/v1/kpis/{kpi}` |
 | 4–5 | `POST /api/v1/agent/runs`, `GET /api/v1/agent/runs/{id}/stream` (SSE), `GET /api/v1/approvals`, `POST /api/v1/approvals/{id}/decision` |
 | 5 | `POST /api/v1/auth/token`, `GET /api/v1/audit/events` |

@@ -8,4 +8,4 @@ Usage (from backend/):
     uv run python -m data_generation validate
 """
 
-GENERATOR_VERSION = "1.0.0"
+GENERATOR_VERSION = "1.1.0"

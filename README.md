@@ -6,7 +6,7 @@ EnterpriseOps AI investigates supplier-invoice exceptions the way an experienced
 
 > **Agents reason, services compute, humans approve, the audit log remembers.**
 
-**Status:** Task 2 of 8 — SAP-aligned ERP schema and a seeded synthetic dataset with labeled exceptions. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
+**Status:** Task 3 of 8 — deterministic three-way matching engine, KPIs and API v1 (all accuracy targets met on the held-out dataset). Tasks 1–2 done. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ---
 
@@ -27,8 +27,14 @@ Load the synthetic ERP dataset (≈35,000 rows, 18 months, labeled exceptions):
 
 ```bash
 cd backend && uv sync
-uv run python -m data_generation generate --seed 42 --profile full
+uv run python -m data_generation generate --seed 42 --profile full   # load data (+ 19 checks)
+uv run python -m app.services.matching                               # run three-way matching
+uv run python -m evaluation db                                       # score it vs. ground truth
 ```
+
+Then try the API, e.g. http://localhost:8000/api/v1/exceptions?unpaid_only=true or
+http://localhost:8000/api/v1/kpis/supplier_otif?group_by=supplier (the API container must be rebuilt
+after code changes: `docker compose up -d --build`).
 
 ## Development without Docker for the API
 
@@ -53,12 +59,12 @@ uv run pytest --cov               # integration tests run when EOPS_TEST_DATABAS
 ## Repository layout
 
 ```
-backend/        FastAPI app, data generator (data_generation/), Alembic migrations, tests
+backend/        FastAPI app (API v1, matching engine, KPIs), data_generation/, evaluation/, migrations, tests
 infra/          Database init scripts
 docs/           Requirements, architecture, schema, agent design, API, roadmap, decisions, log
 .github/        CI: lint, types, tests with PostgreSQL+pgvector, secret scan, Docker build
 ```
-Coming later: `documents/` + `evaluation/` (Task 4), `frontend/` (Task 6).
+Coming later: `documents/` (Task 4), `frontend/` (Task 6).
 
 ## Documentation
 

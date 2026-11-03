@@ -10,8 +10,8 @@ from sqlalchemy import Engine, text
 
 from tests.conftest import alembic_config
 
-EXPECTED_SCHEMAS = {"erp", "ops", "docs", "audit", "iam", "eval"}
-EXPECTED_TABLES = 21
+EXPECTED_SCHEMAS = {"erp", "ops", "docs", "audit", "iam", "eval", "agent"}
+EXPECTED_TABLES = 26  # base tables; agent views are counted separately
 
 
 def _schemas(engine: Engine) -> set[str]:
@@ -31,7 +31,7 @@ def test_head_creates_all_tables(migrated_engine: Engine) -> None:
         count = conn.execute(
             text(
                 "SELECT count(*) FROM information_schema.tables "
-                "WHERE table_schema IN ('erp', 'ops', 'iam', 'eval')"
+                "WHERE table_schema IN ('erp', 'ops', 'iam', 'eval') AND table_type = 'BASE TABLE'"
             )
         ).scalar_one()
     assert count == EXPECTED_TABLES

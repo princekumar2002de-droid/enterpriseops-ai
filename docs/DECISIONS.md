@@ -123,3 +123,29 @@ ADR-001 to ADR-012 were proposed in Phase 1 and **approved on 2026-11-02**. Late
 **Status:** Accepted (2026-11-02)
 **Decision:** (1) Data is generated clean first; each scenario changes exactly one invoice (at most one scenario per invoice), so every label has one cause. (2) Labels state what a correct engine must report under the rules T1–T3 / R1–R5 in PROJECT_REQUIREMENTS §8.2. (3) Hard negatives (`HN_*`, `is_hard_negative = true`) are legitimate look-alikes (partial deliveries, credit memos with the same reference, reversed-and-reposted receipts, repeat orders, in-tolerance and small-difference prices, old bank changes) used to measure false positives. (4) A validation report checks that unlabeled data really is clean.
 **Consequences:** + precision/recall/false-positive rate are measurable; generator bugs can't silently become false ground truth. − Single-cause invoices are cleaner than reality; multi-exception invoices can be added later as a separate, explicitly labeled scenario.
+
+## ADR-022 — Agents read curated `agent` views only
+**Status:** Accepted (2026-11-02)
+**Context:** ADR-020 gave the agent role SELECT on whole erp/ops tables as an interim step.
+**Decision:** Migration 0003 creates schema `agent` with 9 read-only views (invoice overview, line match, goods receipts, purchase orders, contract prices, supplier profile, open exceptions, duplicate pairs, latest run). `eops_agent_ro` loses all access to erp/ops tables and can read only these views. Views expose no bank details (only `last_bank_change_date`), no ground truth and no user data. The API reads the same views, so "latest completed run" has a single definition.
+**Consequences:** + the agent's data surface is explicit, reviewable and tested. − New agent data needs a new/changed view (a migration).
+
+## ADR-023 — Matching engine is a pure function over a snapshot; runs are versioned
+**Status:** Accepted (2026-11-02)
+**Decision:** `run_matching(Snapshot, MatchConfig) -> MatchOutcome` has no I/O. A snapshot is built from DB rows or from generated rows with the same column names, so the engine is unit-testable and the evaluation harness can score any seed in memory. Each persisted run stores engine version, full parameters and a SHA-256 params hash; runs are appended, never overwritten. Concurrent runs are serialised with a transaction-scoped advisory lock.
+**Consequences:** + reproducible, auditable results; − results of older runs remain until the dataset is reloaded (the loader truncates `ops.match_run` as derived data).
+
+## ADR-024 — Payment block set by the engine via a column-level grant (decision D1)
+**Status:** Accepted (2026-11-02)
+**Decision:** `eops_app` may `UPDATE (payment_block) ON erp.invoice_header` and nothing else in erp. Each run sets block `R` on unpaid invoices with a blocking exception and clears it elsewhere (paid invoices are never blocked). All other ERP writes stay approval-gated through `eops_action` (ADR-003).
+**Consequences:** + realistic (SAP invoice verification blocks automatically) without widening write access; tested in `test_db_roles.py`.
+
+## ADR-025 — Duplicate scoring and threshold tuning on a separate seed (decision D2)
+**Status:** Accepted (2026-11-02)
+**Decision:** Transparent weighted score: normalized reference 0.45, exact amount 0.25 (close 0.10), dates ≤ 3 days 0.15 (≤ 30 days 0.05), same PO set 0.15. Candidates share the VAT ID (catches duplicate vendor masters), amount within ±0.5 %, invoice date within 30 days; credit memos excluded. Pairs ≥ 0.30 are recorded; ≥ **0.60** are flagged. The threshold was chosen on **seed 7** and reported on **seed 42**.
+**Finding:** on seed 7 every threshold from 0.50 to 1.00 is perfect; false positives start at ≤ 0.45 (repeat orders and partial deliveries score 0.30–0.45). 0.60 keeps the largest safety margin. The synthetic duplicates are easy (all score 1.00) — harder variants (re-issued under a new number, amended amounts) are on the backlog so the threshold trade-off becomes measurable.
+
+## ADR-026 — KPI catalog defined once in SQL on the agent views
+**Status:** Accepted (2026-11-02)
+**Decision:** 12 KPIs live in `app/services/kpis.py` as named SQL definitions (value + sample size, optional supplier breakdown), parameterised by company code and period. They read the `agent` views, so the dashboard (Task 6), the API and the agents (Task 4) report identical numbers. Two KPIs are verified against an independent Python calculation in the tests.
+**Consequences:** + one definition per KPI; − money KPIs are per company currency (no FX conversion, by design for v1).

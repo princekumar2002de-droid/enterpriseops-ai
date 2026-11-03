@@ -45,7 +45,7 @@ NAMING_CONVENTION = {
 metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 # Schemas owned by our migrations (public only holds alembic_version).
-MANAGED_SCHEMAS = frozenset({"erp", "ops", "docs", "audit", "iam", "eval"})
+MANAGED_SCHEMAS = frozenset({"erp", "ops", "docs", "audit", "iam", "eval", "agent"})
 
 
 def include_name(name: str | None, type_: str, parent_names: object) -> bool:
@@ -404,6 +404,111 @@ tolerance_rule = Table(
     Column("policy_ref", String(120), nullable=False, comment="Section of the AP Tolerance Policy"),
     schema="ops",
     comment="Invoice tolerance limits (SAP OMR6). Rule semantics: ADR-016",
+)
+
+# ------------------------------------------------------------ ops: matching (Task 3)
+
+match_run = Table(
+    "match_run",
+    metadata,
+    Column("run_id", Integer, primary_key=True, autoincrement=True),
+    Column("engine_version", String(20), nullable=False),
+    Column("params", JSONB, nullable=False, comment="Tolerances + duplicate settings used"),
+    Column("params_hash", CHAR(64), nullable=False),
+    Column("status", String(10), nullable=False),
+    Column("triggered_by", String(40), nullable=False),
+    Column("started_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("finished_at", DateTime(timezone=True), nullable=True),
+    Column("invoice_count", Integer, nullable=False, server_default="0"),
+    Column("exception_count", Integer, nullable=False, server_default="0"),
+    CheckConstraint("status IN ('RUNNING', 'COMPLETED', 'FAILED')", name="status_valid"),
+    schema="ops",
+    comment="One deterministic matching run (versioned, never overwritten)",
+)
+
+invoice_result = Table(
+    "invoice_result",
+    metadata,
+    Column("run_id", Integer, ForeignKey("ops.match_run.run_id"), primary_key=True),
+    Column("invoice_id", String(10), ForeignKey("erp.invoice_header.invoice_id"), primary_key=True),
+    Column("status", String(20), nullable=False),
+    Column("blocks_payment", Boolean, nullable=False),
+    Column("exception_count", Integer, nullable=False),
+    Column("amount_at_risk", MONEY, nullable=False),
+    Column("currency", CHAR(3), nullable=False),
+    CheckConstraint(
+        "status IN ('MATCHED', 'WITHIN_TOLERANCE', 'BLOCKED', 'FLAGGED', 'NOT_APPLICABLE')",
+        name="status_valid",
+    ),
+    Index(None, "invoice_id"),
+    schema="ops",
+    comment="Invoice-level outcome of a run",
+)
+
+line_result = Table(
+    "line_result",
+    metadata,
+    Column("run_id", Integer, ForeignKey("ops.match_run.run_id"), primary_key=True),
+    Column("invoice_id", String(10), primary_key=True),
+    Column("item_no", Integer, primary_key=True),
+    Column("po_number", String(10), nullable=True),
+    Column("po_item_no", Integer, nullable=True),
+    Column("po_qty", QTY, nullable=True),
+    Column("net_received_qty", QTY, nullable=True),
+    Column("previously_invoiced_qty", QTY, nullable=True),
+    Column("invoiced_qty", QTY, nullable=False),
+    Column("po_price", PRICE, nullable=True),
+    Column("invoice_price", PRICE, nullable=False),
+    Column("price_variance_amount", MONEY, nullable=True),
+    Column("price_variance_pct", PCT, nullable=True),
+    Column("price_outcome", String(20), nullable=True),
+    Column("qty_outcome", String(20), nullable=True),
+    ForeignKeyConstraint(
+        ["invoice_id", "item_no"],
+        ["erp.invoice_item.invoice_id", "erp.invoice_item.item_no"],
+    ),
+    schema="ops",
+    comment="Three-way match detail per invoice line",
+)
+
+exception = Table(
+    "exception",
+    metadata,
+    Column("exception_id", Integer, primary_key=True, autoincrement=True),
+    Column("run_id", Integer, ForeignKey("ops.match_run.run_id"), nullable=False),
+    Column("invoice_id", String(10), ForeignKey("erp.invoice_header.invoice_id"), nullable=False),
+    Column("item_no", Integer, nullable=True, comment="NULL = invoice-level exception"),
+    Column("code", String(40), nullable=False),
+    Column("severity", String(10), nullable=False),
+    Column("blocks_payment", Boolean, nullable=False),
+    Column("amount_at_risk", MONEY, nullable=False),
+    Column("currency", CHAR(3), nullable=False),
+    Column("details", JSONB, nullable=False, server_default="{}"),
+    Column("status", String(12), nullable=False, server_default="OPEN"),
+    CheckConstraint("severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')", name="severity_valid"),
+    Index(None, "run_id", "code"),
+    Index(None, "invoice_id"),
+    schema="ops",
+    comment="Exception found by the deterministic engine (taxonomy: PROJECT_REQUIREMENTS 8.3)",
+)
+
+duplicate_candidate = Table(
+    "duplicate_candidate",
+    metadata,
+    Column("run_id", Integer, ForeignKey("ops.match_run.run_id"), primary_key=True),
+    Column("invoice_id", String(10), ForeignKey("erp.invoice_header.invoice_id"), primary_key=True),
+    Column(
+        "candidate_invoice_id",
+        String(10),
+        ForeignKey("erp.invoice_header.invoice_id"),
+        primary_key=True,
+        comment="The earlier invoice this one may duplicate",
+    ),
+    Column("score", Numeric(4, 3), nullable=False),
+    Column("is_flagged", Boolean, nullable=False),
+    Column("features", JSONB, nullable=False),
+    schema="ops",
+    comment="Scored duplicate pairs (flagged at or above the configured threshold)",
 )
 
 # --------------------------------------------------------------------------- eval

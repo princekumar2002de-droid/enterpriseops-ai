@@ -35,11 +35,13 @@ LOAD_ORDER = [
     t.tolerance_rule,
 ]
 EVAL_TABLES = [t.supplier_persona, t.ground_truth_label, t.dataset_run]
+# Derived results become meaningless when the data is replaced (CASCADE clears the rest).
+DERIVED_TABLES = [t.match_run]
 
 # iam.role is reference data owned by the migration and is never truncated.
 TRUNCATE_SQL = (
     "TRUNCATE "
-    + ", ".join(f"{tbl.schema}.{tbl.name}" for tbl in [*LOAD_ORDER, *EVAL_TABLES])
+    + ", ".join(f"{tbl.schema}.{tbl.name}" for tbl in [*LOAD_ORDER, *EVAL_TABLES, *DERIVED_TABLES])
     + " RESTART IDENTITY CASCADE"
 )
 

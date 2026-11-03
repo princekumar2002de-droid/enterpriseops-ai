@@ -26,9 +26,22 @@ def _as_role(engine: Engine, role: str, sql: str) -> None:
             trans.rollback()
 
 
-def test_agent_role_can_read_erp_and_ops(migrated_engine: Engine) -> None:
-    _as_role(migrated_engine, "eops_agent_ro", "SELECT count(*) FROM erp.invoice_header")
-    _as_role(migrated_engine, "eops_agent_ro", "SELECT count(*) FROM ops.tolerance_rule")
+AGENT_VIEWS = [
+    "latest_match_run",
+    "invoice_overview",
+    "invoice_line_match",
+    "goods_receipt_line",
+    "purchase_order",
+    "contract_price",
+    "supplier_profile",
+    "open_exception",
+    "duplicate_pair",
+]
+
+
+@pytest.mark.parametrize("view", AGENT_VIEWS)
+def test_agent_role_can_read_curated_views(migrated_engine: Engine, view: str) -> None:
+    _as_role(migrated_engine, "eops_agent_ro", f"SELECT * FROM agent.{view} LIMIT 1")
 
 
 @pytest.mark.parametrize(
@@ -39,6 +52,10 @@ def test_agent_role_can_read_erp_and_ops(migrated_engine: Engine) -> None:
         "DELETE FROM erp.payment",
         "SELECT count(*) FROM eval.ground_truth_label",
         "SELECT count(*) FROM iam.app_user",
+        # since migration 0003 the agent reads curated views only (ADR-022)
+        "SELECT count(*) FROM erp.invoice_header",
+        "SELECT count(*) FROM erp.supplier_bank_account",
+        "SELECT count(*) FROM ops.exception",
     ],
 )
 def test_agent_role_is_denied(migrated_engine: Engine, sql: str) -> None:
@@ -53,3 +70,24 @@ def test_app_role_cannot_write_erp(migrated_engine: Engine) -> None:
 
 def test_action_role_can_write_erp(migrated_engine: Engine) -> None:
     _as_role(migrated_engine, "eops_action", INSERT_TERMS)
+
+
+def test_app_role_may_only_set_payment_block(migrated_engine: Engine) -> None:
+    """Decision D1: the engine sets payment blocks; nothing else in erp is writable."""
+    _as_role(migrated_engine, "eops_app", "UPDATE erp.invoice_header SET payment_block = NULL")
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        _as_role(migrated_engine, "eops_app", "UPDATE erp.invoice_header SET status = 'PAID'")
+
+
+def test_agent_views_expose_no_bank_details(migrated_engine: Engine) -> None:
+    with migrated_engine.connect() as conn:
+        columns = (
+            conn.execute(
+                text("""
+            SELECT column_name FROM information_schema.columns WHERE table_schema = 'agent'
+        """)
+            )
+            .scalars()
+            .all()
+        )
+    assert not [c for c in columns if "iban" in c]

@@ -500,8 +500,9 @@ class Generator:
                 pay_date = inv["invoice_date"] + self.days(2, terms["discount_days"])
                 discount = money(gross * terms["discount_pct"] / 100)
             else:
+                # Payment runs pay on or before the due date; ~8 % are paid late on purpose.
                 pay_date = (
-                    inv["invoice_date"] + timedelta(days=terms["net_days"]) + self.days(-4, 3)
+                    inv["invoice_date"] + timedelta(days=terms["net_days"]) + self.days(-5, 0)
                 )
                 if self.rng.random() < 0.08:
                     pay_date += self.days(5, 25)

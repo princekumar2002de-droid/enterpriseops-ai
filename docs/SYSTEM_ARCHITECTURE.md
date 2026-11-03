@@ -98,10 +98,10 @@ enterpriseops-ai/
 │   │   ├── db/             # SQLAlchemy models, sessions, views
 │   │   └── mcp/            # optional MCP server (read-only tools)
 │   ├── data_generation/    # synthetic ERP generator + seeded labels (ADR-019)
+│   ├── evaluation/         # scoring against ground truth, reports (ADR-023/025)
 │   ├── migrations/         # Alembic
 │   └── tests/              # unit / integration / agent (mocked)
 ├── documents/              # sample contracts & policies (source of RAG corpus)
-├── evaluation/             # datasets, runners, reports
 ├── frontend/               # React + TS + Tailwind + Recharts
 ├── docs/                   # the 9 project documents + ADRs + diagrams
 ├── docker-compose.yml

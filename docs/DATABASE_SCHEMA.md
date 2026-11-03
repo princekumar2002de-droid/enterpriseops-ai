@@ -100,11 +100,12 @@ uv run alembic upgrade head && uv run pytest                    # 4. apply + dri
 | Schema | Purpose | Created in | Tables |
 |---|---|---|---|
 | `erp` | Simulated SAP-aligned source system | 0001 | 15 (0002) |
-| `ops` | EnterpriseOps configuration and (Task 3+) results | 0001 | 1 (0002) |
+| `ops` | Configuration and matching results | 0001 | 6 (1 in 0002, 5 in 0003) |
 | `docs` | RAG corpus | 0001 | none yet (Task 4) |
 | `audit` | Append-only audit trail | 0001 | none yet (Task 5) |
 | `iam` | Users and business roles | 0001 | 2 (0002) |
 | `eval` | Ground truth for evaluation, **never visible to agents** (ADR-018) | 0002 | 3 (0002) |
+| `agent` | Curated read-only **views** — the only objects the agent role can read (ADR-022) | 0003 | 9 views |
 
 ### Tables (migration 0002)
 Money `NUMERIC(15,2)`, unit prices `NUMERIC(15,4)`, quantities `NUMERIC(13,3)` (ADR-012).
@@ -132,6 +133,24 @@ Money `NUMERIC(15,2)`, unit prices `NUMERIC(15,4)`, quantities `NUMERIC(13,3)` (
 | `eval.supplier_persona` | supplier_id | hidden behavior profile used by the generator | — |
 | `eval.ground_truth_label` | label_id | invoice_id, item_no (NULL = invoice level), label_code, is_hard_negative, details (JSONB) | — |
 
+### Matching result tables (migration 0003)
+| Table | Key | Content |
+|---|---|---|
+| `ops.match_run` | run_id | engine_version, params (JSONB: tolerances + duplicate settings), params_hash, status, triggered_by, counts |
+| `ops.invoice_result` | (run_id, invoice_id) | MATCHED / WITHIN_TOLERANCE / BLOCKED / FLAGGED / NOT_APPLICABLE, blocks_payment, exception_count, amount_at_risk |
+| `ops.line_result` | (run_id, invoice_id, item_no) | po_qty, net_received_qty, previously_invoiced_qty, invoiced_qty, po/invoice price, price variance amount/%, price_outcome, qty_outcome |
+| `ops.exception` | exception_id | run_id, invoice_id, item_no (NULL = invoice level), code, severity, blocks_payment, amount_at_risk, currency, details (JSONB evidence), status |
+| `ops.duplicate_candidate` | (run_id, invoice_id, candidate_invoice_id) | score, is_flagged, features (JSONB) |
+
+Runs are appended, never overwritten (ADR-023). Reloading the synthetic dataset truncates `ops.match_run`
+and, via CASCADE, all results (derived data).
+
+### Agent views (schema `agent`, migration 0003)
+`latest_match_run`, `invoice_overview`, `invoice_line_match`, `goods_receipt_line`, `purchase_order`,
+`contract_price`, `supplier_profile` (bank details reduced to `last_bank_change_date`), `open_exception`,
+`duplicate_pair`. All result views show the **latest completed run**. Views run with the owner's
+privileges, so `eops_agent_ro` needs no table access.
+
 ### Business roles (seeded in `iam.role`)
 | Role | Approval limit (EUR) |
 |---|---|
@@ -141,26 +160,28 @@ Money `NUMERIC(15,2)`, unit prices `NUMERIC(15,4)`, quantities `NUMERIC(13,3)` (
 | BUYER, PROCUREMENT_MANAGER, FINANCE_VIEWER, AUDITOR | — |
 | ADMIN | — (no business approvals: segregation of duties) |
 
-### Database roles and privileges (ADR-020)
+### Database roles and privileges (ADR-020, ADR-022, ADR-024)
 Group roles (`NOLOGIN`), created by migration 0002 if missing. Login users for the application are added in Task 5.
 
 | Privilege | `eops_agent_ro` | `eops_app` | `eops_action` |
 |---|---|---|---|
-| Read `erp` | ✅ | ✅ | ✅ |
-| Write `erp` | ❌ | ❌ | ✅ (INSERT/UPDATE, no DELETE) |
-| Read `ops` | ✅ | ✅ | ❌ |
-| Write `ops` | ❌ | ✅ | ❌ |
+| Read `agent` views | ✅ | ✅ | ❌ |
+| Read `erp` tables | ❌ (since 0003) | ✅ | ✅ |
+| Write `erp` | ❌ | only `invoice_header.payment_block` (ADR-024) | ✅ INSERT/UPDATE, no DELETE |
+| Read / write `ops` | ❌ / ❌ | ✅ / ✅ | ❌ / ❌ |
 | Read `iam` | ❌ | ✅ | ✅ |
 | Read `eval` | ❌ | ❌ | ❌ |
 
-Verified by `tests/test_db_roles.py` (agent role: SELECT works; INSERT/UPDATE/DELETE on erp and any read of `eval`/`iam` → *permission denied*).
-Task 3 will narrow `eops_agent_ro` from whole tables to curated read views.
+Verified by `tests/test_db_roles.py`: the agent role reads all 9 views but is denied on erp/ops tables,
+bank accounts, `iam` and `eval`; the app role can set `payment_block` but not `status`; no agent view has
+an IBAN column.
 
 ### Migration history
 | Revision | Date | Description | Reversible |
 |---|---|---|---|
 | `0001` | 2026-11-02 | Baseline: `CREATE EXTENSION vector`; schemas `erp, ops, docs, audit, iam` | Yes |
 | `0002` | 2026-11-02 | 21 tables in `erp`, `iam`, `ops`, `eval`; `eval` schema; 8 business roles; DB group roles + grants | Yes (revokes privileges; cluster-wide roles are intentionally not dropped) |
+| `0003` | 2026-11-02 | 5 matching result tables in `ops`; schema `agent` with 9 views; agent role narrowed to views; column grant on `payment_block` | Yes (drops views, restores 0002 grants) |
 
 ### Databases
 | Database | Use |
@@ -180,5 +201,5 @@ uv run python -m data_generation validate                             # re-run t
 
 | Profile | Suppliers | Materials | POs | Invoices | GR lines | Invoices with exception |
 |---|---|---|---|---|---|---|
-| `full` (seed 42) | 61 | 400 | 3,030 | 3,496 + 55 credit memos | 7,589 | 18.9 % |
+| `full` (seed 42, generator 1.1.0) | 61 | 400 | 3,030 | 3,496 + 55 credit memos | 7,604 | 18.9 % |
 | `small` (seed 42) | 21 | 80 | ~320 | ~375 | ~790 | ~18 % |

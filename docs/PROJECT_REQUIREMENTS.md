@@ -285,11 +285,16 @@ These rules define what the deterministic engine (Task 3) must report; the groun
 | T1 | **Small difference first (BD):** a price difference with \|diff\| ≤ 5.00 (company currency) per line is accepted. |
 | T2 | **Price (PP):** otherwise flag `PRICE_VARIANCE` if the % limit (+2 %) **or** the absolute limit (+100.00) is exceeded (lower side: −10 % / −500.00). |
 | T3 | **Quantity (DQ):** flag `QTY_VARIANCE` if invoiced qty > net received qty − previously invoiced qty (zero tolerance). |
+| T4 | **Contract price:** flag `CONTRACT_PRICE_DEVIATION` (non-blocking) if the PO net price is above the agreed contract price of the referenced contract item. |
+| T5 | **Header checks** (PO-based invoices): `CURRENCY_MISMATCH` if invoice currency ≠ PO currency (blocking); `PAYMENT_TERMS_MISMATCH` if terms differ (non-blocking). |
 | R1 | A suspected duplicate gets **only** `DUPLICATE_SUSPECTED`; its quantities do not count as "previously invoiced". |
 | R2 | `NO_GOODS_RECEIPT` on a line suppresses `QTY_VARIANCE` on that line. Net received = Σ 101 − Σ 102. |
 | R3 | `CURRENCY_MISMATCH` suppresses price checks for that invoice. |
 | R4 | Credit memos are excluded from quantity and duplicate checks; they reduce the amount payable. |
 | R5 | `BANK_DETAILS_CHANGED`: a non-initial bank account became valid 0–30 days before the invoice date. |
+| R6 | Invoices are processed in receipt order (received date, invoice id); "previously invoiced" counts earlier non-duplicate invoices of the same PO item. Duplicate scoring: ADR-025. |
+
+Implemented in `backend/app/services/matching/` (engine 1.0.0) and verified against the ground truth — see TESTING_AND_EVALUATION §6.
 
 ### 8.3 Exception taxonomy and severity
 

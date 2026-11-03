@@ -27,20 +27,25 @@ uv run pytest --cov --cov-report=term-missing
 uv run ruff check . && uv run ruff format --check . && uv run mypy   # same gates as CI
 ```
 
-## 3. Current test inventory (after Task 2)
+## 3. Current test inventory (after Task 3)
 
 | File | Tests | Verifies | Type |
 |---|---|---|---|
-| `test_health.py` | 11 | Liveness/readiness contract, request-ID handling (incl. log-injection defense), 503 on DB failure, readiness reports the head migration, health probes logged at DEBUG, OpenAPI published | Unit + 1 integration |
-| `test_migrations.py` | 4 | Schemas and all 21 tables exist, pgvector installed, full downgrade/upgrade round trip | Integration |
-| `test_schema_drift.py` | 1 | Migrated DB == `app/db/tables.py` (ADR-017) | Integration |
-| `test_db_roles.py` | 8 | Agent role reads erp/ops; INSERT/UPDATE/DELETE on erp and any read of eval/iam denied; app role can't write erp; action role can | Integration (security) |
-| `test_data_generation.py` | 10 | Same seed → identical content hash; different seed differs; all 17 label codes present; labels reference real rows; invoice totals; chronological IDs; full-profile exception rate 15–25 %; catalog guard; loader refuses production | Unit |
-| `test_dataset_integration.py` | 3 | Small dataset loads and passes all 19 validation checks; reload is idempotent (reference roles survive); CLI generate + validate exit 0 | Integration |
+| `test_health.py` | 11 | Liveness/readiness, request IDs (incl. log-injection defense), 503 path, head migration, probe logging | Unit + 1 integration |
+| `test_migrations.py` | 4 | 7 schemas, 26 base tables, pgvector, full downgrade/upgrade round trip | Integration |
+| `test_schema_drift.py` | 1 | Migrated DB == `app/db/tables.py` | Integration |
+| `test_db_roles.py` | 21 | Agent role: all 9 views readable; erp/ops tables, bank accounts, iam, eval denied; app role only `payment_block`; action role writes erp; no IBAN in views | Integration (security) |
+| `test_data_generation.py` | 10 | Generator determinism, scenario coverage, totals, exception-rate band, guards | Unit |
+| `test_dataset_integration.py` | 3 | Load + 19 validation checks, idempotent reload, generator CLI | Integration |
+| `test_matching_rules.py` | 22 | Price rules incl. BD / %-OR-absolute / lower side / exact limits, quantity rules, over-invoicing, contract, bank window, reference normalisation, duplicate scores | Unit |
+| `test_matching_engine.py` | 11 | Precedence R1–R5, flag-only codes, params hash stability, **Task 3 targets on seeds 42 full/small and 3 small (CI gate)** | Unit |
+| `test_matching_db.py` | 5 | DB run == in-memory run, payment block only on unpaid blocked invoices, versioned runs, agent views show latest run, run + `evaluation db` CLIs | Integration |
+| `test_api_v1.py` | 15 | Paging/filters, three-way evidence in invoice detail, duplicate links, sort order, 7 error-envelope cases, all KPIs compute, **2 KPIs equal an independent Python calculation**, supplier breakdown | Integration |
+| `test_evaluation_cli.py` | 2 | Evaluation report written, tuning sweep | Unit |
 
-**Last verified run** (2026-11-02, dev workspace: Python 3.12.3, PostgreSQL 16 + pgvector 0.6.0):
-**37 passed**; coverage 99 % (`app` + `data_generation`); ruff, ruff format, mypy (strict, 26 files) clean.
-Developer Mac and GitHub Actions: pending for Task 2 (Task 1 state: all green).
+**Last verified run** (2026-11-02, dev workspace, PostgreSQL 16): **105 passed**, coverage 98 % overall,
+**100 % on the matching core** (engine, rules, duplicates, snapshot); ruff, format and mypy strict (50 files) clean.
+Developer Mac and GitHub Actions for Task 3: pending.
 
 ## 4. AI evaluation plan (Tasks 4–7)
 
@@ -64,8 +69,9 @@ shipment → payment. Everything is generated **clean**, then scenarios inject e
 
 **Supplier personas** (hidden in `eval.supplier_persona`): reliable (~60 %), chronically late (15 %),
 price creep (10 %), sloppy invoicer (15 %), one fraud signal, plus one duplicate vendor master record
-(same VAT ID as a sloppy supplier). Observed in seed 42: late suppliers average 8.3 days delay
-(39 % on time) vs 0.4 days (88 %) for reliable ones; price-creep suppliers have a 42 % exception rate.
+(same VAT ID as a sloppy supplier). Observed in seed 42: late suppliers average 8.5 days delay
+(39 % on time) vs 0.4 days (88 %) for reliable ones; price-creep suppliers have a 41.3 % exception rate
+(reliable: 13.3 %).
 
 ### 5.2 Scenarios and labels (seed 42, full profile: invoices per label)
 | Code | Invoices | How it is created | Engine must flag? |
@@ -88,6 +94,7 @@ price creep (10 %), sloppy invoicer (15 %), one fraud signal, plus one duplicate
 | HN_SAME_AMOUNT_DIFFERENT_PO | 29 | Repeat order: same amount, different PO and reference | **No** |
 | HN_OLD_BANK_CHANGE | 3 | Bank change ≥ 40 days before any invoice | **No** |
 
+**Dataset fingerprint (seed 42, full):** generator 1.1.0 → content hash `32a2a5b2249fe8dd…`, 35,606 rows (generator 1.0.0 was `477673a2b9fa2927…`; 1.1.0 only changed payment dates, labels are identical).
 **Exception rate:** 661 of 3,496 invoices (18.9 %) carry at least one real exception (target band 15–25 %).
 
 ### 5.3 Validation report (19 checks)
@@ -104,3 +111,61 @@ markup capped so the difference stays ≤ 4.50 — see IMPLEMENTATION_LOG.)
 Matching precision/recall = engine exceptions vs labels with `is_hard_negative = false`, per code;
 false-positive rate on hard negatives is reported separately. Labels are only readable by the
 evaluation harness (ADR-018).
+
+## 6. Matching engine evaluation (Task 3)
+
+Command: `uv run python -m evaluation matching --seed 42 --report evaluation/reports/matching_seed42_full.md`
+(in memory) or `uv run python -m evaluation db` (latest DB run vs. the labels in `eval`).
+
+### 6.1 Results — reporting seed 42 (full profile, engine 1.0.0, generator 1.1.0)
+| Code | TP | FP | FN | Precision | Recall |
+|---|---|---|---|---|---|
+| BANK_DETAILS_CHANGED | 7 | 0 | 0 | 1.000 | 1.000 |
+| CONTRACT_PRICE_DEVIATION | 51 | 0 | 0 | 1.000 | 1.000 |
+| CURRENCY_MISMATCH | 17 | 0 | 0 | 1.000 | 1.000 |
+| DUPLICATE_SUSPECTED | 52 | 0 | 0 | 1.000 | 1.000 |
+| NO_GOODS_RECEIPT | 148 | 0 | 0 | 1.000 | 1.000 |
+| NO_PO_REFERENCE | 102 | 0 | 0 | 1.000 | 1.000 |
+| PAYMENT_TERMS_MISMATCH | 68 | 0 | 0 | 1.000 | 1.000 |
+| PO_OVER_INVOICED | 17 | 0 | 0 | 1.000 | 1.000 |
+| PRICE_VARIANCE | 385 | 0 | 0 | 1.000 | 1.000 |
+| QTY_VARIANCE | 101 | 0 | 0 | 1.000 | 1.000 |
+
+Look-alike (hard-negative) invoices flagged: **0 of 1,051** (0.00 %). All five D3 targets pass.
+Identical results on full seeds 1, 7, 123, 2026 and small seeds 1–5.
+
+### 6.2 How to read these numbers (honest interpretation)
+- **Rule-based codes at 100 %** mainly prove that the engine implements the written rules (§8.2)
+  correctly: labels and engine follow the same rules. They do **not** prove the rules are the right
+  business rules — that is a domain decision, documented in §8.2 and the AP Tolerance Policy (Task 4).
+- **The informative results** are the hard negatives (0 / 1,051 false alarms on partial deliveries,
+  in-tolerance prices, small differences, reposted receipts, credit memos, repeat orders, old bank
+  changes) and the duplicate detector.
+- **Duplicate threshold sweep on the tuning seed 7** (decision D2):
+
+  | Threshold | TP | FP | FN | Precision | Recall |
+  |---|---|---|---|---|---|
+  | 0.30 | 52 | 41 | 0 | 0.559 | 1.000 |
+  | 0.35–0.45 | 52 | 13 | 0 | 0.800 | 1.000 |
+  | 0.50–1.00 | 52 | 0 | 0 | 1.000 | 1.000 |
+
+  Chosen: **0.60** (largest margin above the false-positive cliff). Limitation: every synthetic duplicate
+  scores 1.00, so the data cannot discriminate between thresholds in 0.50–1.00. Backlog: harder
+  duplicate variants (re-issued with a new number, amended amount) to make this trade-off measurable.
+
+### 6.3 Business view of the run (seed 42, DE01 unless noted)
+| KPI | Value | n |
+|---|---|---|
+| First-pass match rate | 80.74 % | 3,177 invoices |
+| Exception rate | 19.26 % | 3,177 |
+| Blocked open invoices (DE01 / all) | 81 / 87 | — |
+| Supplier OTIF | 61.48 % | 5,873 PO items |
+| Average delivery delay | 1.95 days | 5,873 |
+| Price variance | 0.535 % of invoiced value | 6,922 lines |
+| Non-PO invoice share | 2.14 % | 3,177 |
+| Cash-discount capture | 41.88 % | 1,181 |
+| Late payment rate | 12.84 % | 2,936 |
+| Receipt-to-payment (median) | 25 days | 2,936 |
+| PO-to-receipt lead time (median) | 24 days | 5,873 |
+
+The KPI layer surfaced a data-realism bug (late payment rate was 35.9 %): see IMPLEMENTATION_LOG, Task 3.

@@ -9,6 +9,8 @@ import structlog
 from fastapi import FastAPI, Request, Response
 
 from app.api.health import router as health_router
+from app.api.v1 import router as v1_router
+from app.api.v1.errors import install_error_handlers
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -46,6 +48,7 @@ def create_app() -> FastAPI:
         request_id = incoming if _VALID_REQUEST_ID.match(incoming) else uuid.uuid4().hex
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id)
+        request.state.request_id = request_id
 
         started = time.perf_counter()
         try:
@@ -65,7 +68,9 @@ def create_app() -> FastAPI:
         )
         return response
 
+    install_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(v1_router)
     return app
 
 

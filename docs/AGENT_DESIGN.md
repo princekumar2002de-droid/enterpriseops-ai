@@ -56,3 +56,23 @@ Note from the LangGraph docs: on resume, the interrupted node **re-runs from the
 
 ### 11.4 Shared state (conceptual)
 `InvestigationState`: `case_id`, `invoice_id`, `user {id, role, approval_limit}`, `messages`, `evidence[] {source_ref, payload}`, `citations[]`, `finding: CaseFinding | None`, `grounding: {passed, violations}`, `proposed_action: ActionRequest | None`, `approval: {status, approver, comment}`, `budget {tokens_used, tool_calls, max}`, `trace_id`.
+
+---
+
+## Data surface for agent tools (implemented in Task 3, ADR-022)
+
+Agent tools will read **only** these views (role `eops_agent_ro`); everything else is denied by PostgreSQL.
+
+| View | Use in tools (Task 4) |
+|---|---|
+| `agent.invoice_overview` | `get_invoice` header, match status, payment block, amount at risk |
+| `agent.invoice_line_match` | line-level three-way evidence (PO qty/price, net received, previously invoiced, outcomes) |
+| `agent.goods_receipt_line` | receipts and reversals per PO item |
+| `agent.purchase_order` | `get_po` |
+| `agent.contract_price` | `get_contract_terms` (structured part; clauses come from RAG) |
+| `agent.supplier_profile` | supplier master incl. `last_bank_change_date` (no IBAN) |
+| `agent.open_exception` | `list_exceptions` for the latest run |
+| `agent.duplicate_pair` | `find_duplicate_candidates` with feature breakdown |
+| `agent.latest_match_run` | run provenance for citations ("according to match run N") |
+
+KPI tools call the KPI service (`app/services/kpis.py`), which reads the same views.
